@@ -69,6 +69,35 @@ These techniques reduce retrieval failures by providing both semantic and exact 
   ```
   This ensures that your API key is securely accessed by the system without being hardcoded in the scripts.
 
+### Customizing Model Choices
+
+The Contextual Retriever allows you to customize the models used for embeddings and chat completions. By default, the system uses the following models:
+- **Embeddings**: `text-embedding-3-large`
+- **Chat Completions**: `gpt-4o-mini`
+
+#### Changing the Models
+
+To change the models used in the scripts, follow these steps:
+
+1. **Open the Script**: Locate the script you wish to modify (`retrieve.py`, `chunk_and_contextualize.py`, or `build_index.py`).
+
+2. **Modify the Model Name**: Find the line where the model is specified and replace it with your desired model. For example, to use a different embedding model, change:
+   ```python
+   model='text-embedding-3-large'
+   ```
+   to:
+   ```python
+   model='your-desired-model'
+   ```
+
+3. **Save the Changes**: After modifying the script, save your changes.
+
+#### Available Models
+
+Refer to the [OpenAI Models Documentation](https://platform.openai.com/docs/models) for a list of available models and their capabilities. Choose models that best fit your use case.
+
+By customizing the models, you can optimize the performance and cost of the Contextual Retriever to suit your specific needs.
+
 ### Interactive Querying
 
 After processing the PDFs, the system will be ready for queries. You can enter your queries interactively, and the system will retrieve relevant information based on the context.
