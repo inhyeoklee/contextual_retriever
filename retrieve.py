@@ -11,7 +11,7 @@ client = OpenAI(api_key=config.OPENAI_API_KEY)
 def embed_query(query):
     response = client.embeddings.create(
         input=query,
-        model='text-embedding-ada-002'
+        model='text-embedding-3-large'
     )
     return np.array(response.data[0].embedding).astype('float32')
 
@@ -37,7 +37,7 @@ Context:
 Please provide a detailed answer."""}
     ]
     response = client.chat.completions.create(
-        model='gpt-3.5-turbo',
+        model='gpt-4o-mini',
         messages=messages,
         max_tokens=500,
         temperature=0.7,

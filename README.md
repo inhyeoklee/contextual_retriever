@@ -59,6 +59,16 @@ The system implements Contextual Retrieval strategies as outlined by Anthropic, 
 
 These techniques reduce retrieval failures by providing both semantic and exact match capabilities, ensuring that the most relevant information is retrieved efficiently.
 
+### Customizing Settings
+
+#### API Configuration
+
+- **API Keys**: Set your OpenAI API key as an environment variable. This is done by adding the following line to your shell configuration file (e.g., `.bashrc`, `.zshrc`):
+  ```bash
+  export OPENAI_API_KEY='your-api-key-here'
+  ```
+  This ensures that your API key is securely accessed by the system without being hardcoded in the scripts.
+
 ### Interactive Querying
 
 After processing the PDFs, the system will be ready for queries. You can enter your queries interactively, and the system will retrieve relevant information based on the context.
@@ -68,4 +78,4 @@ After processing the PDFs, the system will be ready for queries. You can enter y
 - Ensure all PDF files are placed in the specified directory before running the pipeline.
 - The system is designed to handle large collections of documents efficiently.
 
-For any issues or questions, please use Issues within this repository for support.
+For any issues or questions, please refer to the documentation or contact the support team.

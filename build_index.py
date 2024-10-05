@@ -12,7 +12,7 @@ def embed_text(texts):
     for text in texts:
         response = client.embeddings.create(
             input=text,
-            model='text-embedding-ada-002'
+            model='text-embedding-3-large'
         )
         embeddings.append(response.data[0].embedding)
     return np.array(embeddings).astype('float32')
