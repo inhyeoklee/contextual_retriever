@@ -1,6 +1,9 @@
-# Contextual Retriever
+<h1 style="display: inline-block;">Contextual Retriever</h1>
+<img src="https://github.com/user-attachments/assets/2cac998b-fd40-4a77-b83a-356dd86679ac" alt="puppy" width="450" style="float: right; margin-left: 10px;"/>
+<p>This project implements a contextual retriever using Voyage AI and OpenAI embeddings for document retrieval and reranking. Inspired by Anthropic's <a href="https://www.anthropic.com/news/contextual-retrieval">Contextual Retrieval</a> article, we rerank using the Voyage AI model and generate answers using the OpenAI API.</p>
 
-This project implements a contextual retriever using Voyage AI and OpenAI embeddings for document retrieval and reranking. Inspired by Anthropic's [Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) article, we rerank using the Voyage AI model and generate answers using the OpenAI API.
+
+
 
 ## Table of Contents
 
@@ -19,7 +22,6 @@ This project implements a contextual retriever using Voyage AI and OpenAI embedd
   - [Running the Entire Pipeline](#running-the-entire-pipeline)
 - [Customization](#customization)
 - [Acknowledgments](#acknowledgments)
-- [License](#license)
 
 ## Introduction
 
