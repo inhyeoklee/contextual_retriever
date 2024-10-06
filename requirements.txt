@@ -1,5 +1,5 @@
 openai
-faiss-cpu
+faiss
 numpy
-pdfminer.six
-python-dotenv
+voyageai
+rank_bm25
