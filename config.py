@@ -1,15 +1,17 @@
-# config.py
 import os
 
-# Retrieve API keys from environment variables
-# Ensure these environment variables are set before running the application
+class Config:
+    """Configuration class to manage API keys and other settings."""
+    VOYAGE_API_KEY = os.getenv('VOYAGE_API_KEY')
+    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-# OpenAI API Key
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-if OPENAI_API_KEY is None:
-    raise EnvironmentError("OPENAI_API_KEY environment variable is not set.")
+    @staticmethod
+    def validate_keys():
+        """Validate that all necessary API keys are set."""
+        if not Config.VOYAGE_API_KEY:
+            raise ValueError("VOYAGE_API_KEY is not set. Please set it in your environment variables.")
+        if not Config.GEMINI_API_KEY:
+            raise ValueError("GEMINI_API_KEY is not set. Please set it in your environment variables.")
 
-# VoyageAI API Key
-VOYAGE_API_KEY = os.getenv('VOYAGE_API_KEY')
-if VOYAGE_API_KEY is None:
-    raise EnvironmentError("VOYAGE_API_KEY environment variable is not set.")
+# Validate API keys at import time
+Config.validate_keys()

@@ -1,218 +1,165 @@
-<h1 style="display: inline-block;">Contextual Retriever</h1>
-<img src="https://github.com/user-attachments/assets/2cac998b-fd40-4a77-b83a-356dd86679ac" alt="puppy" width="450" style="float: right; margin-left: 10px;"/>
-<p>This project implements a contextual retriever using Voyage AI and OpenAI embeddings for document retrieval and reranking. Inspired by Anthropic's <a href="https://www.anthropic.com/news/contextual-retrieval">Contextual Retrieval</a> article, we rerank using the Voyage AI model and generate answers using the OpenAI API.</p>
+# Contextual Retriever
 
+![Puppy](https://github.com/user-attachments/assets/2cac998b-fd40-4a77-b83a-356dd86679ac)
 
+This project implements a contextual retriever using Voyage AI embeddings for document retrieval and reranking. Inspired by Anthropic's [Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) article, we rerank using the Voyage AI model and generate answers using the Gemini API.
 
+## Overview
 
-## Table of Contents
+**Contextual Retriever** enhances Retrieval-Augmented Generation (RAG) systems by improving retrieval accuracy when dealing with large knowledge bases. It addresses the loss of context that occurs when documents are split into smaller chunks for processing.
 
-- [Introduction](#introduction)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Pipeline Overview](#pipeline-overview)
-- [File Descriptions](#file-descriptions)
-  - [config.py](#configpy)
-  - [chunk_and_contextualize.py](#chunk_and_contextualizepy)
-  - [build_index.py](#build_indexpy)
-  - [retrieve.py](#retrievepy)
-  - [run_pipeline.py](#run_pipelinepy)
-- [Usage](#usage)
-  - [Running the Pipeline Step by Step](#running-the-pipeline-step-by-step)
-  - [Running the Entire Pipeline](#running-the-entire-pipeline)
-- [Customization](#customization)
-- [Acknowledgments](#acknowledgments)
+By employing **Contextual Embeddings** and **Contextual BM25**, along with **prompt caching**, the system enriches each chunk with additional context, significantly improving retrieval performance.
 
-## Introduction
+## Features
 
-The Contextual Retriever is a pipeline designed to enhance retrieval accuracy by contextualizing document chunks and leveraging Voyage AI and OpenAI embeddings along with BM25 for retrieval and reranking. This approach is inspired by Anthropic's methodology on Contextual Retrieval.
+- **Token-Based Chunking with Overlap**: Splits documents into token-based chunks with overlapping tokens to maintain context continuity.
+- **Context Generation with Prompt Caching**: Utilizes a language model to generate context for each chunk, reducing costs and improving efficiency.
+- **Similarity Search using FAISS**: Builds a FAISS index for efficient similarity search and retrieval.
 
-## Prerequisites
+## API Usage
 
-- Python 3.7 or higher
-- Voyage AI API Key
-- OpenAI API Key
+### Voyage AI API
+- **Purpose**: Embedding text and queries.
+- **Usage**:
+  - **`build_index.py`**: Embeds text data to create embeddings for indexing.
+  - **`run_pipeline.py`**: Embeds queries and documents for retrieval tasks.
+  - **`retrieve.py`**: Embeds queries and documents to facilitate retrieval and reranking.
+
+### Gemini API
+- **Purpose**: Generating context and answers using a generative model.
+- **Usage**:
+  - **`chunk_and_contextualize.py`**: Generates context for text chunks using adjacent chunks.
+  - **`run_pipeline.py`**: Generates answers to queries using retrieved chunks as context.
+  - **`retrieve.py`**: Generates detailed answers to user queries using the provided context.
+
+### FAISS
+- **Purpose**: Building and querying similarity indexes.
+- **Usage**:
+  - **`build_index.py`**: Builds a FAISS index for efficient similarity search.
+  - **`run_pipeline.py`**: Uses FAISS for retrieving relevant document chunks.
+  - **`retrieve.py`**: Retrieves relevant chunks using FAISS index.
+
+### BM25
+- **Purpose**: Text retrieval using BM25 algorithm.
+- **Usage**:
+  - **`build_index.py`**: Builds a BM25 index for text retrieval.
+  - **`run_pipeline.py`**: Uses BM25 to retrieve relevant document chunks.
+  - **`retrieve.py`**: Retrieves relevant chunks using BM25.
 
 ## Installation
 
-1. **Clone the repository**:
+### Prerequisites
+
+- Python 3.7 or higher
+- Voyage AI API key
+- Gemini API key
+- Required Python packages (listed in `requirements.txt`)
+
+### Steps
+
+1. **Clone the Repository**
 
    ```bash
-   git clone [repository link]
+   git clone https://github.com/yourusername/contextual_retriever.git
+   cd contextual_retriever
    ```
 
-2. **Install required packages**:
+2. **Create a Virtual Environment (Optional)**
+
+   ```bash
+   python -m venv venv
+   source venv/bin/activate
+   # On Windows:
+   # venv\Scripts\activate
+   ```
+
+3. **Install Dependencies**
+
+   Install the required Python packages:
 
    ```bash
    pip install -r requirements.txt
    ```
 
-   The `requirements.txt` file includes the following dependencies:
-   - `openai`
-   - `faiss`
-   - `numpy`
-   - `voyageai`
-   - `rank_bm25`
+4. **Configure API Keys**
 
-3. **Set up your API keys in `config.py`**:
-
-   Ensure that the environment variables `OPENAI_API_KEY` and `VOYAGE_API_KEY` are set. The application will raise an error if these are not configured.
+   Set your Voyage AI and Gemini API keys in your environment variables:
 
    ```bash
-   # Example of setting environment variables
-   export OPENAI_API_KEY='your_openai_api_key'
-   export VOYAGE_API_KEY='your_voyage_api_key'
+   export VOYAGE_API_KEY='your-voyage-api-key'
+   export GEMINI_API_KEY='your-gemini-api-key'
    ```
-
-## Pipeline Overview
-
-The pipeline consists of the following steps:
-
-1. **Text Extraction and Contextualization** (`chunk_and_contextualize.py`): 
-   - **OpenAI API**: Used to generate contextual information for each text chunk. The `generate_context` function sends a prompt to the OpenAI API to create context for each chunk based on the overall document.
-   
-2. **Index Building** (`build_index.py`): 
-   - **Voyage AI API**: Used to generate embeddings for each chunk. The `embed_text` function calls the Voyage AI API to obtain embeddings, which are then used to build a FAISS index for similarity search.
-   - **BM25**: A lexical retrieval model used to build a BM25 index from the text chunks.
-
-3. **Retrieval and Reranking** (`retrieve.py`): 
-   - **Voyage AI API**: Used to generate embeddings for user queries. The `embed_query` function uses the Voyage AI API to create query embeddings.
-   - **OpenAI API**: Used to generate comprehensive answers based on the top retrieved chunks. The `generate_answer` function sends the top chunks to the OpenAI API to produce a detailed response.
-
-## File Descriptions
-
-### config.py
-
-- **Purpose**: Stores configuration variables such as API keys.
-- **Usage**: Update this file with your Voyage AI and OpenAI API keys.
-- **Outputs**: None.
-- **Notes**: Includes error handling to ensure environment variables are set.
-
-### chunk_and_contextualize.py
-
-- **Execution Order**: **First**
-- **Purpose**: Processes the input document to extract text, split it into chunks, and contextualize each chunk.
-- **How it works**:
-  - **Extract Text**: Reads the provided PDF document and extracts the textual content.
-  - **Chunking**: Splits the extracted text into manageable chunks (e.g., 500 tokens each) for efficient processing.
-  - **Contextualization**: Uses the OpenAI API to generate additional context for each chunk, improving retrieval accuracy.
-- **Outputs**:
-  - `output/contextualized_chunks.json`: A JSON file containing the list of contextualized chunks.
-- **Relation to Next File**:
-  - The output file `contextualized_chunks.json` is used by `build_index.py` to create the retrieval indexes.
-- **Notes**: Now includes logging and error handling for file operations and API calls.
-
-### build_index.py
-
-- **Execution Order**: **Second**
-- **Purpose**: Builds the retrieval indexes from the contextualized chunks.
-- **How it works**:
-  - **Load Chunks**: Reads `output/contextualized_chunks.json`.
-  - **Embedding Generation**: Uses the Voyage AI API to generate embeddings for each chunk.
-  - **FAISS Index Creation**: Builds a FAISS index for efficient similarity search using the generated embeddings.
-  - **BM25 Index Creation**: Constructs a BM25 index for lexical retrieval.
-- **Outputs**:
-  - `output/chunks.index`: The FAISS index file.
-  - `output/bm25_index.pkl`: Serialized BM25 index.
-  - `output/chunks_meta.json`: Metadata containing the text of each chunk.
-- **Relation to Next File**:
-  - The generated indexes are used by `retrieve.py` for retrieval and reranking.
-- **Notes**: Now includes logging and error handling for file operations.
-
-### retrieve.py
-
-- **Execution Order**: **Third**
-- **Purpose**: Handles user queries by retrieving and reranking relevant chunks.
-- **How it works**:
-  - **Load Indexes**: Loads the FAISS index, BM25 index, and chunks metadata from the `output` directory.
-  - **Embed Query**: Uses the Voyage AI API to generate an embedding for the user's query.
-  - **Initial Retrieval**:
-    - **FAISS Search**: Retrieves top chunks based on vector similarity.
-    - **BM25 Search**: Retrieves top chunks based on lexical matching.
-  - **Combine Results**: Merges and deduplicates results from both retrieval methods.
-  - **Reranking**: Reranks the combined results using cosine similarity between the query embedding and chunk embeddings.
-  - **Generate Answer**: Uses the OpenAI API to generate a comprehensive answer based on the top retrieved chunks.
-  - **Output**: Presents the top relevant chunks and the generated answer as the response to the user's query.
-- **Outputs**:
-  - Displays the retrieved and reranked chunks and the generated answer related to the user's query.
-- **Relation to Previous Files**:
-  - Uses the indexes and metadata generated by `build_index.py`.
-
-### run_pipeline.py
-
-- **Execution Order**: **Wrapper Script (Optional)**
-- **Purpose**: Runs the entire pipeline in sequence.
-- **How it works**:
-  - Calls `chunk_and_contextualize.py`, `build_index.py`, and `retrieve.py` in order.
-- **Usage**:
-  - Simplifies the process by allowing the user to execute one command to run the entire pipeline.
-  - The input can be a single file or a directory containing multiple PDF files.
-
-## Customization
-
-To customize the project to use a different model, you will need to edit the following files:
-
-1. **retrieve.py**:
-   - Modify the `embed_query` function to use your desired model for generating query embeddings.
-   - Update the `generate_answer` function if the model's API or response format differs.
-
-2. **build_index.py**:
-   - Change the `embed_text` function to use your chosen model for generating embeddings for document chunks.
-
-3. **chunk_and_contextualize.py**:
-   - Adjust the `generate_context` function to use a different model if needed, ensuring compatibility with the model's API.
-
-Ensure that any changes made are consistent with the model's API and that all necessary dependencies are installed.
 
 ## Usage
 
-### Running the Pipeline Step by Step
-
-1. **Contextualize Chunks**:
-
-   ```bash
-   python chunk_and_contextualize.py /path/to/your/document.pdf
-   ```
-
-   - **Input**: PDF document.
-   - **Output**: `output/contextualized_chunks.json`.
-
-2. **Build Indexes**:
-
-   ```bash
-   python build_index.py
-   ```
-
-   - **Input**: `output/contextualized_chunks.json`.
-   - **Outputs**:
-     - `output/chunks.index`
-     - `output/bm25_index.pkl`
-     - `output/chunks_meta.json`
-
-3. **Retrieve Information**:
-
-   ```bash
-   python retrieve.py "Your query here"
-   ```
-
-   - **Input**: User query.
-   - **Outputs**: Relevant chunks and generated answer displayed in the console.
-
-### Running the Entire Pipeline
-
-Alternatively, you can use the `run_pipeline.py` script to execute all steps sequentially. The input can be a single file or a directory containing multiple PDF files:
+Run the pipeline script with the path to your documents:
 
 ```bash
-python run_pipeline.py /path/to/your/input
+python run_pipeline.py /path/to/your/documents
 ```
 
-- **Inputs**:
-  - PDF document or a directory containing multiple PDF documents.
-  - User query (entered during execution).
-- **Outputs**:
-  - All intermediate output files.
-  - Retrieval results and generated answer displayed in the console.
+This will process your documents and create an output directory containing the results.
+
+## Example
+
+Suppose you have a directory of PDF files at `/path/to/your/documents`. To process these documents:
+
+```bash
+python run_pipeline.py /path/to/your/documents
+```
+
+## Notes
+
+### Prompt Caching
+
+- Implemented in `chunk_and_contextualize.py`.
+- Reduces the number of tokens sent to the language model, lowering costs and improving efficiency.
+- The system prompt containing the entire document is cached and reused for generating context for each chunk.
+
+## Dependencies
+
+- [FAISS](https://faiss.ai/) for building the similarity index.
+
+## References
+
+- [Anthropic's Contextual Retrieval Article](https://www.anthropic.com/news/contextual-retrieval)
+- [FAISS Documentation](https://faiss.ai/)
 
 ## Acknowledgments
 
-This project adopts many ideas from Anthropic's [Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) article, with modifications to use Voyage AI's embeddings and reranking methods, and the OpenAI API for generating answers.
+- Inspired by Anthropic's research on Contextual Retrieval.
+- Thanks to the open-source community for the tools and libraries used in this project.
+
+## Code Summary
+
+### extract_text.py
+- `extract_text(pdf_path, output_file)`: Extracts text from a PDF file and saves it to a specified output file.
+
+### build_index.py
+- `embed_text(texts)`: Embeds a list of texts using the Voyage AI client.
+- `build_bm25_index(texts)`: Builds a BM25 index from a list of texts.
+
+### run_pipeline.py
+- `process_pdf(pdf_path)`: Processes a PDF file by extracting text, chunking, and building an index.
+- `embed_query(query)`: Embeds a query using the Voyage AI client.
+- `embed_texts(texts)`: Embeds a list of texts using the Voyage AI client.
+- `retrieve_chunks(query, index, texts, bm25, k=20)`: Retrieves relevant chunks for a query using both embedding and BM25 methods.
+- `generate_answer(query, chunks)`: Generates an answer to the query using the provided chunks as context.
+- `retrieve_and_answer()`: Retrieves relevant chunks and generates an answer for a user query.
+- `main(input_path)`: Main function to process PDFs and retrieve answers.
+
+### chunk_and_contextualize.py
+- `split_into_chunks(text)`: Splits text into chunks of a specified size with overlap.
+- `generate_context(chunks, index)`: Generates context for a chunk using adjacent chunks.
+- `process_document(text, output_file)`: Processes a document by splitting it into chunks and generating context for each chunk.
+
+### config.py
+- `Config`: Configuration class to manage API keys and other settings.
+- `validate_keys()`: Validates that all necessary API keys are set.
+
+### retrieve.py
+- `embed_query(query)`: Embeds a query using the Voyage AI client.
+- `embed_texts(texts)`: Embeds a list of texts using the Voyage AI client.
+- `count_tokens_for_messages(messages, model="gemini-1.5-pro")`: Estimates the total number of tokens used by a list of messages.
+- `generate_answer(query, chunks)`: Generates an answer to the query using the provided chunks as context.
+- `retrieve_chunks(query, index, texts, bm25, k=20)`: Retrieves relevant chunks for a query using both embedding and BM25 methods.

@@ -1,76 +1,121 @@
-import openai
+import sys
+import logging
+import tiktoken
 import json
 import os
-import logging
-from config import OPENAI_API_KEY
-import sys  # Added import for sys
+import google.generativeai as genai
+from config import Config  # Import the Config class
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Initialize logging
+logging.basicConfig(level=logging.INFO)
 
-client = openai.OpenAI(api_key=OPENAI_API_KEY)
+# Load Gemini API key from config
+config = Config()
+genai.configure(api_key=config.GEMINI_API_KEY)
 
-def generate_context(document_text, chunk):
-    """Generate context for a given chunk within a document."""
-    prompt = f"""<document>
-{document_text}
-</document>
-Here is the chunk we want to situate within the whole document
-<chunk>
-{chunk}
-</chunk>
-Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else."""
+# Initialize tokenizer
+encoder = tiktoken.encoding_for_model("gpt-3.5-turbo")
+
+# Define constants
+MAX_TOKENS = 1048576  # Updated to match Gemini model's input token limit
+CHUNK_SIZE = 7000   # Adjust as needed
+OVERLAP = 200      # Adjust as needed
+MAX_PROMPT_TOKENS = 1000  # Ensure the prompt stays within token limits
+
+
+def split_into_chunks(text):
+    """Split text into chunks of a specified size with overlap."""
+    tokens = encoder.encode(text)
+    chunks = []
+    start = 0
+    while start < len(tokens):
+        end = min(start + CHUNK_SIZE, len(tokens))
+        chunk_tokens = tokens[start:end]
+        chunk = encoder.decode(chunk_tokens)
+        chunks.append(chunk)
+        start += CHUNK_SIZE - OVERLAP
+    return chunks
+
+
+def generate_context(chunks, index):
+    """Generate context for a chunk using adjacent chunks."""
+    context_chunks = []
+    # Get previous chunk
+    if index > 0:
+        context_chunks.append(chunks[index - 1])
+    # Get next chunk
+    if index < len(chunks) - 1:
+        context_chunks.append(chunks[index + 1])
+    # Combine context chunks
+    context_text = '\n'.join(context_chunks)
+    prompt = f"""
+Here is some context from adjacent chunks:
+{context_text}
+
+Here is the chunk we want to situate:
+{chunks[index]}
+
+Please provide a short, succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else.
+"""
+    # Ensure prompt does not exceed MAX_PROMPT_TOKENS
+    prompt_tokens = encoder.encode(prompt)
+    if len(prompt_tokens) > MAX_PROMPT_TOKENS:
+        # Truncate context_text to fit within limits
+        allowed_context_length = MAX_PROMPT_TOKENS - len(encoder.encode(prompt.replace(context_text, '')))
+        context_tokens = encoder.encode(context_text)
+        truncated_context_tokens = context_tokens[:allowed_context_length]
+        truncated_context = encoder.decode(truncated_context_tokens)
+        prompt = f"""
+Here is some context from adjacent chunks:
+{truncated_context}
+
+Here is the chunk we want to situate:
+{chunks[index]}
+
+Please provide a short, succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else.
+"""
     try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=100,
-            temperature=0.5,
-            n=1,
+        # Call Gemini API
+        response = genai.GenerativeModel("gemini-1.5-flash").generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=MAX_PROMPT_TOKENS,
+                temperature=0.2
+            )
         )
-        generated_text = response.choices[0].message.content.strip()
-        return generated_text
+        # Check if response is blocked
+        if not response.candidates:
+            raise ValueError("Prompt was blocked. Please review the content.")
+        # Access response using dot notation
+        context = response.text.strip()
+        return context
     except Exception as e:
-        logging.error(f"Error generating context for chunk: {chunk[:30]}... - {e}")
+        logging.error(f"Error generating context for chunk {index}: {e}")
         return ""
 
-if __name__ == "__main__":
-    output_dir = 'output'
-    os.makedirs(output_dir, exist_ok=True)
 
-    try:
-        # Load the extracted text from the document
-        with open(os.path.join(output_dir, 'document_text.txt'), 'r') as f:
-            document_text = f.read()
-    except FileNotFoundError:
-        logging.error("document_text.txt file not found.")
-        sys.exit(1)
-    except Exception as e:
-        logging.error(f"Error reading document text: {e}")
-        sys.exit(1)
-
-    try:
-        # Load the chunks generated previously
-        with open(os.path.join(output_dir, 'chunks.json'), 'r') as f:
-            chunks = json.load(f)
-    except FileNotFoundError:
-        logging.error("chunks.json file not found.")
-        sys.exit(1)
-    except json.JSONDecodeError as e:
-        logging.error(f"Error decoding JSON: {e}")
-        sys.exit(1)
-
-    # Generate context for each chunk
+def process_document(text, output_file):
+    """Process a document by splitting it into chunks and generating context for each chunk."""
+    logging.info("Splitting text into chunks...")
+    chunks = split_into_chunks(text)
     contextualized_chunks = []
-    for chunk in chunks:
-        context = generate_context(document_text, chunk)
-        contextualized_chunk = context + " " + chunk
-        contextualized_chunks.append({
-            'chunk': chunk,
-            'contextualized_chunk': contextualized_chunk
-        })
+    for idx in range(len(chunks)):
+        logging.info(f"Processing chunk {idx+1}/{len(chunks)}")
+        context = generate_context(chunks, idx)
+        contextualized_chunk = context + "\n" + chunks[idx]
+        contextualized_chunks.append({'contextualized_chunk': contextualized_chunk})
+    # Save the contextualized chunks to a JSON file
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(contextualized_chunks, f)
+    logging.info(f"Contextualized chunks saved to {output_file}.")
 
-    # Save the contextualized chunks
-    with open(os.path.join(output_dir, 'contextualized_chunks.json'), 'w') as f:
-        json.dump(contextualized_chunks, f, indent=2)
-    logging.info("Contextualized chunks saved.")
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        logging.error("Usage: python chunk_and_contextualize.py <input_text_file> <output_chunks_file>")
+        sys.exit(1)
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+    with open(input_file, 'r', encoding='utf-8') as f:
+        text = f.read()
+    process_document(text, output_file)
