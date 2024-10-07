@@ -1,5 +1,7 @@
-openai
-faiss
-numpy
-voyageai
-rank_bm25
+faiss-cpu==1.8.0.post1
+numpy==1.26.4
+rank-bm25==0.2.2
+tiktoken==0.7.0
+voyageai==0.2.3
+google-generativeai==0.8.2
+PyPDF2==3.0.1

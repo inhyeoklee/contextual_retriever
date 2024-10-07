@@ -10,6 +10,9 @@ from rank_bm25 import BM25Okapi
 import google.generativeai as genai
 from config import Config
 import tiktoken
+import logging
+import tkinter as tk
+from tkinter import scrolledtext
 
 # Initialize clients
 config = Config()
@@ -20,9 +23,17 @@ genai.configure(api_key=config.GEMINI_API_KEY)
 encoder = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
 # Define maximum tokens
-MAX_TOTAL_TOKENS = 1048576  # Updated to match Gemini model's input token limit
-MAX_RESPONSE_TOKENS = 8192  # Updated to match Gemini model's output token limit
+MAX_TOTAL_TOKENS = 2097152  # Updated to allow for more detailed responses
+MAX_RESPONSE_TOKENS = 16384  # Increased to allow for longer answers
 MAX_PROMPT_TOKENS = MAX_TOTAL_TOKENS - MAX_RESPONSE_TOKENS
+
+# Global variables for index and texts
+index = None
+texts = None
+bm25 = None
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 
 
 def process_pdf(pdf_path):
@@ -89,15 +100,9 @@ def retrieve_chunks(query, index, texts, bm25, k=20):
     # Combine and deduplicate results
     combined_results = list(dict.fromkeys(embedding_results + bm25_results))[:150]
 
-    # Rerank using cosine similarity between embeddings
-    combined_embeddings = embed_texts(combined_results)
-    # Normalize embeddings
-    combined_embeddings_norm = combined_embeddings / np.linalg.norm(combined_embeddings, axis=1, keepdims=True)
-    query_vec_norm = query_vec / np.linalg.norm(query_vec)
-    similarity_scores = np.dot(combined_embeddings_norm, query_vec_norm)
-    # Sort the results by similarity scores
-    reranked_indices = np.argsort(similarity_scores)[::-1]
-    reranked_results = [combined_results[idx] for idx in reranked_indices]
+    # Use Voyage AI reranker
+    reranking = voyage_client.rerank(query, combined_results, model="rerank-2")
+    reranked_results = [result.document for result in reranking.results]
 
     return reranked_results
 
@@ -107,18 +112,8 @@ def generate_answer(query, chunks):
     if not chunks:
         return "The answer to your question was not found in the provided documents."
 
-    # Build the system prompt and user message
-    system_prompt = (
-        "You are an extremely thoughtful and verbose assistant who can help the user extremely well with complicated problems that require sophisticated reasoning. "
-        "You are mathematically enlightened and rely heavily on mathematical and statistical reasoning. You think aloud generally. You use tags strictly as instructed. "
-        "You do not express your own views or beliefs beyond what's strictly necessary to follow the instruction. Your life depends on strictly following the user instruction. "
-        "Follow the user instruction below in a comprehensive and detailed way. You will try up to five attempts at following the user instruction. Each attempt must be marked with \"<A_number>\". "
-        "At each attempt, first write down your internal thoughts. Each step of your internal thoughts must be marked with \"<T_number>\" and must start with a short title describing the internal thought. "
-        "This must include your draft response and its evaluation. After this, write your final response after \"<R>\". If your draft is not satisfactory, make sure to go back to an earlier internal thought step "
-        "(mark it clearly with \"<T_number>\") where the mistake was made and retry from there on, as often as necessary. All these attempts must be unique and must not be duplicate of another attempt. "
-        "After up to five final responses are produced from these attempts, compare them carefully based on the responses (marked with \"<R>\") and the internal thoughts led to them, and pick one as the final answer. "
-        "Repeat the final answer verbatim after \"<Final Response>\". Do not simply pick the last one but carefully consider all draft responses."
-    )
+    # Detailed system prompt
+    system_prompt = "You are an extremely thoughtful and verbose assistant who can help user extremely well with complicated problems that require sophisticated reasoning. You are mathematically enlightened and rely heavily on mathematical and statistical reasoning. You think aloud generally. You use tags strictly as instructed. You do not express your own views or beliefs beyond what's strictly necessary to follow the instruction. Your life depends on strictly following the user instruction."
 
     # Start building the context, ensuring the total tokens stay within limits
     context_chunks = []
@@ -146,47 +141,67 @@ def generate_answer(query, chunks):
         }
     ]
 
-    response = genai.GenerativeModel("gemini-1.5-flash").generate_content(
-        user_content,
-        generation_config=genai.types.GenerationConfig(
-            max_output_tokens=MAX_RESPONSE_TOKENS,
-            temperature=0.2
-        )
-    )
-    answer = response.text.strip()
-    return answer
-
-
-def retrieve_and_answer():
-    """Retrieve relevant chunks and generate an answer for a user query."""
-    output_dir = 'output'
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Load indexes and texts
     try:
-        index = faiss.read_index(os.path.join(output_dir, 'faiss_index.index'))
-        with open(os.path.join(output_dir, 'texts.json'), 'r', encoding='utf-8') as f:
-            texts = json.load(f)
-        with open(os.path.join(output_dir, 'bm25_index.pkl'), 'rb') as f:
-            bm25 = pickle.load(f)
+        response = genai.GenerativeModel("gemini-1.5-flash").generate_content(
+            user_content,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=MAX_RESPONSE_TOKENS,
+                temperature=0.5  # Adjusted for more creative responses
+            )
+        )
+
+        if not response.candidates:
+            logging.warning(f"Prompt blocked or no response generated for query: {query}")
+            return "The prompt was blocked or no response was generated. Please try a different query."
+
+        answer = response.text.strip()
+        return answer
     except Exception as e:
-        print(f"Error loading indexes and texts: {e}")
-        sys.exit(1)
+        logging.error(f"Error generating answer: {e}")
+        return "An error occurred while generating the answer."
 
-    # Prompt user for query
-    query = input("Enter your query: ")
 
-    # Retrieve relevant chunks
-    chunks = retrieve_chunks(query, index, texts, bm25, k=50)  # Retrieve more chunks to select from
+def start_chat_interface():
+    """Start a Tkinter-based chat interface."""
+    def send_query(event=None):
+        query = query_entry.get()
+        if query.strip() == '':
+            return
 
-    # Generate answer
-    answer = generate_answer(query, chunks)
-    print("\nGenerated Answer:\n")
-    print(answer)
+        chat_display.insert(tk.END, f"You: {query}\n", "user")
+        query_entry.delete(0, tk.END)
+
+        # Retrieve relevant chunks
+        chunks = retrieve_chunks(query, index, texts, bm25, k=50)
+
+        # Generate answer
+        answer = generate_answer(query, chunks)
+        chat_display.insert(tk.END, f"Bot: {answer}\n", "bot")
+
+    root = tk.Tk()
+    root.title("Interactive Chatbot")
+    root.geometry("800x600")
+    root.configure(bg="#f5f5f5")
+    root.resizable(True, True)
+
+    chat_display = scrolledtext.ScrolledText(root, wrap=tk.WORD, width=60, height=20, font=("San Francisco", 14), bg="#ffffff", fg="#333333", relief=tk.FLAT)
+    chat_display.tag_configure("user", foreground="#007aff")
+    chat_display.tag_configure("bot", foreground="#34c759")
+    chat_display.pack(padx=20, pady=20, fill=tk.BOTH, expand=True)
+
+    query_entry = tk.Entry(root, width=50, font=("San Francisco", 14), bg="#ffffff", fg="#333333", relief=tk.FLAT)
+    query_entry.pack(side=tk.LEFT, padx=20, pady=20, fill=tk.X, expand=True)
+    query_entry.bind("<Return>", send_query)
+
+    send_button = tk.Button(root, text="Send", command=send_query, font=("San Francisco", 14, "bold"), bg="#e0e0e0", fg="#333333", relief=tk.FLAT)
+    send_button.pack(side=tk.LEFT, padx=20, pady=20)
+
+    root.mainloop()
 
 
 def main(input_path):
-    """Main function to process PDFs and retrieve answers."""
+    global index, texts, bm25
+
     if os.path.isfile(input_path) and input_path.lower().endswith('.pdf'):
         # Process single PDF file
         process_pdf(input_path)
@@ -201,8 +216,19 @@ def main(input_path):
         print(f"Invalid path or no PDF files found at: {input_path}")
         sys.exit(1)
 
-    # After processing PDFs and building index, retrieve and answer
-    retrieve_and_answer()
+    # Load indexes and texts
+    try:
+        index = faiss.read_index(os.path.join('output', 'faiss_index.index'))
+        with open(os.path.join('output', 'texts.json'), 'r', encoding='utf-8') as f:
+            texts = json.load(f)
+        with open(os.path.join('output', 'bm25_index.pkl'), 'rb') as f:
+            bm25 = pickle.load(f)
+    except Exception as e:
+        print(f"Error loading indexes and texts: {e}")
+        sys.exit(1)
+
+    # Start the chat interface
+    start_chat_interface()
 
 
 if __name__ == '__main__':
