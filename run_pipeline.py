@@ -172,7 +172,7 @@ def start_chat_interface():
         query_entry.delete(0, tk.END)
 
         # Retrieve relevant chunks
-        chunks = retrieve_chunks(query, index, texts, bm25, k=50)
+        chunks = retrieve_chunks(query, index, texts, bm25, k=20)  # Reduced k from 50 to 20
 
         # Generate answer
         answer = generate_answer(query, chunks)
