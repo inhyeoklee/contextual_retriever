@@ -24,7 +24,7 @@ encoder = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
 # Define maximum tokens
 MAX_TOTAL_TOKENS = 2097152  # Updated to allow for more detailed responses
-MAX_RESPONSE_TOKENS = 16384  # Increased to allow for longer answers
+MAX_RESPONSE_TOKENS = 2000000  # Increased to allow for longer answers
 MAX_PROMPT_TOKENS = MAX_TOTAL_TOKENS - MAX_RESPONSE_TOKENS
 
 # Global variables for index and texts
@@ -36,12 +36,12 @@ bm25 = None
 logging.basicConfig(level=logging.INFO)
 
 
-def process_pdf(pdf_path):
-    """Process a PDF file by extracting text, chunking, and building an index."""
-    print(f"Processing {pdf_path}...")
+def process_pdf(file_path):
+    """Process a PDF or DOCX file by extracting text, chunking, and building an index."""
+    print(f"Processing {file_path}...")
 
     # Sanitize filename to replace spaces and special characters
-    base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+    base_name = os.path.splitext(os.path.basename(file_path))[0]
     safe_base_name = base_name.replace(' ', '_').replace("'", '').replace('"', '')
 
     extracted_text_file = os.path.join('output', f"{safe_base_name}_extracted.txt")
@@ -50,20 +50,25 @@ def process_pdf(pdf_path):
     # Ensure the 'output' directory exists
     os.makedirs('output', exist_ok=True)
 
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
     try:
-        # Extract text from the PDF
-        print(f"Extracting text from {pdf_path}...")
-        subprocess.run(['python', 'extract_text.py', pdf_path, extracted_text_file], check=True)
+        # Extract text from the file
+        print(f"Extracting text from {file_path}...")
+        subprocess.run(['python', os.path.join(script_dir, 'extract_text.py'), file_path, extracted_text_file], check=True)
 
         # Chunk and contextualize the text
         print("Chunking and contextualizing the text...")
-        subprocess.run(['python', 'chunk_and_contextualize.py', extracted_text_file, chunks_file], check=True)
+        subprocess.run(['python', os.path.join(script_dir, 'chunk_and_contextualize.py'), extracted_text_file, chunks_file], check=True)
 
         # Build the index
         print("Building the index...")
-        subprocess.run(['python', 'build_index.py', chunks_file], check=True)
+        subprocess.run(['python', os.path.join(script_dir, 'build_index.py'), chunks_file], check=True)
     except subprocess.CalledProcessError as e:
         print(f"An error occurred during processing: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
 
 
 def embed_query(query):
@@ -101,7 +106,7 @@ def retrieve_chunks(query, index, texts, bm25, k=20):
     combined_results = list(dict.fromkeys(embedding_results + bm25_results))[:150]
 
     # Use Voyage AI reranker
-    reranking = voyage_client.rerank(query, combined_results, model="rerank-2")
+    reranking = voyage_client.rerank(query, combined_results, model="rerank-v3.5")
     reranked_results = [result.document for result in reranking.results]
 
     return reranked_results
@@ -142,7 +147,7 @@ def generate_answer(query, chunks):
     ]
 
     try:
-        response = genai.GenerativeModel("gemini-1.5-flash").generate_content(
+        response = genai.GenerativeModel("models/gemini-1.5-pro").generate_content(
             user_content,
             generation_config=genai.types.GenerationConfig(
                 max_output_tokens=MAX_RESPONSE_TOKENS,
@@ -202,18 +207,21 @@ def start_chat_interface():
 def main(input_path):
     global index, texts, bm25
 
-    if os.path.isfile(input_path) and input_path.lower().endswith('.pdf'):
-        # Process single PDF file
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    if os.path.isfile(input_path) and input_path.lower().endswith(('.pdf', '.docx')):
+        # Process single PDF or DOCX file
         process_pdf(input_path)
     elif os.path.isdir(input_path):
-        # Process all PDF files in the directory
-        for root, dirs, files in os.walk(input_path):
+        # Process all PDF and DOCX files in the directory
+        for root_dir, dirs, files in os.walk(input_path):
             for file in files:
-                if file.lower().endswith('.pdf'):
-                    pdf_file = os.path.join(root, file)
-                    process_pdf(pdf_file)
+                if file.lower().endswith(('.pdf', '.docx')):
+                    file_path = os.path.join(root_dir, file)
+                    process_pdf(file_path)
     else:
-        print(f"Invalid path or no PDF files found at: {input_path}")
+        print(f"Invalid path or no PDF or DOCX files found at: {input_path}")
         sys.exit(1)
 
     # Load indexes and texts
@@ -233,7 +241,7 @@ def main(input_path):
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
-        print("Usage: python run_pipeline.py <pdf_path_or_directory>")
+        print("Usage: python run_pipeline.py <pdf_or_docx_path_or_directory>")
         sys.exit(1)
     input_path = sys.argv[1]
     main(input_path)

@@ -89,7 +89,7 @@ Please provide a short, succinct context to situate this chunk within the overal
 """
     try:
         # Call Gemini API
-        response = genai.GenerativeModel("gemini-1.5-flash").generate_content(
+        response = genai.GenerativeModel("models/gemini-1.5-pro").generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
                 max_output_tokens=MAX_PROMPT_TOKENS,
@@ -108,6 +108,16 @@ Please provide a short, succinct context to situate this chunk within the overal
 
 def process_documents(input_path, output_file):
     """Process documents by splitting them into chunks and generating context for each chunk."""
+
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Convert input and output paths to absolute paths
+    if not os.path.isabs(input_path):
+        input_path = os.path.join(script_dir, input_path)
+    if not os.path.isabs(output_file):
+        output_file = os.path.join(script_dir, output_file)
+
     if os.path.isdir(input_path):
         logging.info("Reading and combining all files in the directory...")
         combined_text = read_all_files_in_directory(input_path)
@@ -126,15 +136,19 @@ def process_documents(input_path, output_file):
         context = generate_context(chunks, idx)
         contextualized_chunk = context + "\n" + chunks[idx]
         contextualized_chunks.append({'contextualized_chunk': contextualized_chunk})
+
+    # Ensure the output directory exists
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+
     # Save the contextualized chunks to a JSON file
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(contextualized_chunks, f)
     logging.info(f"Contextualized chunks saved to {output_file}.")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        logging.error("Usage: python chunk_and_contextualize.py <input_path> <output_chunks_file>")
-        sys.exit(1)
-    input_path = sys.argv[1]
-    output_file = sys.argv[2]
-    process_documents(input_path, output_file)
+        if len(sys.argv) != 3:
+            logging.error("Usage: python chunk_and_contextualize.py <input_path> <output_chunks_file>")
+            sys.exit(1)
+        input_path = sys.argv[1]
+        output_file = sys.argv[2]
+        process_documents(input_path, output_file)

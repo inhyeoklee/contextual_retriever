@@ -125,7 +125,7 @@ def generate_answer(query, chunks):
         }
     ]
 
-    response = genai.GenerativeModel("gemini-1.5-flash").generate_content(
+    response = genai.GenerativeModel("models/gemini-1.5-pro").generate_content(
         user_content,
         generation_config=genai.types.GenerationConfig(
             max_output_tokens=MAX_RESPONSE_TOKENS,
